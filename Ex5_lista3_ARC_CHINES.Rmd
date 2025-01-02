@@ -1,0 +1,424 @@
+---
+titulo: "Carteiro 'Chinesinho' pela Cidade - Arc Rounting Problem"
+output: html_document
+data:   "17/11/2024"
+---
+
+```{r}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, error = FALSE)
+```
+
+## *Gustavo Finger*
+
+## *Data: 17/11/2024*
+
+## *Disciplina de Prog. Inteira do prof Cassius*
+
+## Passos iniciais
+
+-   Instalar as biliotecas
+-   Personalizar os dados de entrada
+-   Usar o algoritmo de floyde para a matriz de distância e de custo
+-   Aplicar o algoritmo de ARP
+-   Fazer a matriz adjacente
+-   Calcular o circuito pela modo Euleriano
+-   Plotar o circuito. 
+
+```{r}
+library(ggraph) 
+library(dplyr)
+library(igraph)
+
+dados_no <- data.frame(
+  origem = c(1,1,2,3,3,3,4,4,5,5,5,6,7,7,8,8,9,10,11),
+  destino = c(2,3,4,4,5,6,5,9,6,9,8,7,10,11,9,10,10,12,12),
+  peso = c(10,7,4,6,8,5,9,8,7,20,10,22,9,6,7,4,7,13,11)
+)
+
+dados_no
+
+
+# Função para criar matriz _ de custo por meio do dataframe. 
+matriz_custo_grafo <- function(data) {
+  nos <- unique(c(data$origem, data$destino)) # identificar os nós únicos no meu dataframe, porque tem vários com várias ligações
+  n <- max(nos)
+  matriz <- matrix(0, n, n) # cria uma matriz quadrada com nós x nós
+  for (i in 1:nrow(data)) {
+    matriz[data$origem[i], data$destino[i]] <- data$peso[i]
+    matriz[data$destino[i], data$origem[i]] <- data$peso[i] # tive que adicionar este, porque o grafo aqui no exemplo é não direcionado - vai e volta
+  }
+  return(matriz)
+}
+
+
+matriz_custo<- matriz_custo_grafo(dados_no)
+print(matriz_custo)
+
+```
+
+#se não há ligação, preciso colocar valores infinitos no peso:
+
+```{r}
+for(i in 1:nrow(matriz_custo)){
+  for(j in 1:ncol(matriz_custo)){
+       if(matriz_custo[i,j]==0 & i!=j){
+            matriz_custo[i,j] <- Inf
+                               }                       
+                                      }
+                              }
+```
+
+#Algortimo de Floyd
+
+```{r}
+#agora vamos usar o algoritmo de floyd para construir a matriz de trajetos e de custos:
+
+algo_floyd <- function(matriz_custo, pontos_reais) {  # os pontos reais são os pontos de nomenclatura no grafo
+  # Número de vértices (assumindo matriz quadrada)
+  n <- nrow(matriz_custo) # para verificarmos a quantidade de nós apresentados
+  
+  # vamos começar a matriz de distâncias com a matriz de custo
+  dist_matrix <- matriz_custo
+  
+  #precisamos criar uma matriz para o caminho. Vamos criar uma com n^2 - quadradinha mesmo
+  matriz_caminho<- matrix(NA, n, n)
+  
+  
+  # VErificar os pontos predecessores.
+  for (i in 1:n) {
+    for (j in 1:n) {
+      if (i != j && dist_matrix[i, j] < Inf) {
+        matriz_caminho[i, j] <- pontos_reais[i]    #colocando em cada linha o valor do ponto (conforme aula)
+      }
+    }
+  }
+  
+  
+  
+  # Algoritmo de Froyde 
+  for (k in 1:n) {
+    for (i in 1:n) {
+      for (j in 1:n) {
+        # Atualiza a distância se um caminho mais curto for encontrado
+        if (dist_matrix[i, j] > dist_matrix[i, k] + dist_matrix[k, j]) {
+          dist_matrix[i, j] <- dist_matrix[i, k] + dist_matrix[k, j]
+          matriz_caminho[i, j] <- matriz_caminho[k, j]
+        }
+      }
+    }
+  }
+  
+  
+  # vamos colocar os pontinhos do exerício, ao invés de trabalharmos de 1...6, pois é um subgrafo
+  matriz_caminho_real <- matrix(NA, n, n)
+  for (i in 1:n) {
+    for (j in 1:n) {
+      if (!is.na(matriz_caminho[i, j])) {
+        matriz_caminho_real[i, j] <- pontos_reais[which(pontos_reais == matriz_caminho[i, j])]
+      }
+    }
+  }
+  
+  matriz_caminho_real[is.na(matriz_caminho_real)] <- 50
+  
+  for (i in 1:n){
+    matriz_caminho_real[i,i]<-pontos_reais[i]
+    
+  }
+  
+  
+  #vamos colocar os pontos corretos nas linhas e nas colunas para não confundir 
+  
+  rownames(dist_matrix) <- pontos_reais
+  colnames(dist_matrix) <- pontos_reais
+  rownames(matriz_caminho_real) <- pontos_reais
+  colnames(matriz_caminho_real) <- pontos_reais
+  
+  
+  return(list(distancia = dist_matrix, caminho = matriz_caminho_real))
+}
+
+                          
+```
+
+
+#vamos encontrar no grafo, os nós pares+ e ímpares
+
+```{r}
+contador<-0
+nos_pares<-c()
+nos_impares<-c()
+
+for(i in 1:nrow(matriz_custo)){
+  for(j in 1:ncol(matriz_custo)){
+       if(matriz_custo[i,j] != Inf && matriz_custo[i,j] != 0)
+            contador<-contador+1
+                                                             
+                               }
+            
+            if(contador %% 2 !=0)
+              nos_impares<-append(nos_impares,i)
+                                 
+            if(contador %% 2 == 0)
+              nos_pares<-append(nos_pares,i)
+                                                   
+              contador<-0
+                            }
+
+print("Nós pares:")
+print(nos_pares)
+print("---------------------------------------------------------")
+print("Nós Ímpares:(sempre vem em 'pares')")
+print(nos_impares)
+print("---------------------------------------------------------")
+
+
+```
+os arcos que devem ser dobrados são os ímpares
+
+```{r}
+#os arcos que devem ser dobrados são os ímpares
+pontos_reais<-seq(1:12)
+
+resultado <- algo_floyd(matriz_custo, pontos_reais)
+print("Matriz de Custo atualizada de floyd:")
+print(resultado$distancia)
+print("Matriz de Trajeto ou de Percurso de floyd:")
+print(resultado$caminho)
+
+#combinações necessárias:
+combinacoes<-choose(length(nos_impares),2)
+
+#vamos fazer todas as combinações.
+combinacoes <- combn(nos_impares, 2)
+
+# Calcular o custo de cada combinação Vamos ao Maching
+# Inicializar variáveis para armazenar o menor custo e sua combinação
+
+
+pares_validos <- list()
+
+# vamos Percorrer todas as combinações possíveis de dois pares da lista de nós_impares
+for (i in 1:(ncol(combinacoes) - 1)) {
+  for (j in (i + 1):ncol(combinacoes)) {
+    # Obter as duas combinações
+    par1 <- combinacoes[, i]
+    par2 <- combinacoes[, j]
+    
+    # Verificar se as combinações não compartilham números
+    if (length(intersect(par1, par2)) == 0) {
+      # Adicionar o par de combinações como válido
+      pares_validos <- append(pares_validos, list(list(par1, par2)))
+    }
+  }
+}
+print("---------------------------------------------------------")
+print("Pares válidos")
+print(pares_validos)
+
+```
+vamos testar todo custo de todas as combinações em pares_validos
+vamos verificar o menor custo desta bagaceira e trazer o melhor matching
+veja função abaixo
+
+```{r}
+matching<-function(custo,pares){ 
+menor_custo <- Inf  # Começa com infinito para garantir que qualquer custo real seja menor
+for(i in 1:length(pares)){
+  primeiro_par<-pares[[i]]
+  primeiro_vetor <- pares[[i]][[1]]
+  segundo_vetor <-  pares[[i]][[2]]
+  custo_atual<-custo[primeiro_vetor[1],primeiro_vetor[2]]+custo[segundo_vetor[1],segundo_vetor[2]]
+  print(custo_atual)
+  if (custo_atual < menor_custo) {
+    menor_custo <<- custo_atual
+    melhor_combinacao <- i
+                                 }
+  
+                                 }
+ 
+    matching<-pares_validos[[i]]
+    return(matching)
+                              }
+
+
+matching<-matching(resultado$distancia,pares_validos)
+print("---------------------------------------------------------")
+print("melhor par")
+print(matching)
+
+```
+vamos verificar o arco que tenho que dobrar, para isto vamos a matriz de trajeto de floyd.
+```{r}
+
+# Função para encontrar o percurso
+encontrar_percurso <- function(matriz_trajeto, ponto_inicial, ponto_final) {
+  # Inicializar o percurso com um vetor zeradinho
+  percurso <- c()
+  
+  # Verificar se o ponto inicial e final estão no grafo
+  if (!(ponto_inicial %in% rownames(matriz_trajeto)) || !(ponto_final %in% colnames(matriz_trajeto))) {
+    return("Ponto inicial ou final não estão no grafo, favor usar óculos")
+  }
+  
+  # Encontrar a linha do ponto inicial
+  for (i in 1:nrow(matriz_trajeto)) {
+    if (rownames(matriz_trajeto)[i] == ponto_inicial) {
+      
+      # Adicionar o ponto final ao percurso para fazer de trás para frente
+      percurso <- c(percurso, ponto_final)
+      proximo_valor <- Inf
+      
+      while(proximo_valor!=ponto_inicial){
+        
+        
+        # Encontrar o índice da coluna correspondente ao ponto final
+        idx_final <- match(ponto_final, colnames(matriz_trajeto))
+        proximo_valor <- matriz_trajeto[i, idx_final]
+        
+        #adiciona o ponto no vetor de percurso
+        percurso <- c(percurso, proximo_valor)
+        
+        ponto_final<-proximo_valor
+        
+      }
+      
+      return(percurso)
+    }
+  }
+} 
+
+# percursos encontrados que tenho que dobrar na matriz de floyd:
+resultado2<-list()
+for(i in 1:length(matching)){ 
+  primeiro_par<- matching[[i]]
+  resultado2[[i]] <- encontrar_percurso(resultado$caminho, primeiro_par[1], primeiro_par[2])
+                          }
+
+print("---------------------------------------------------------")
+print("caminhos que tenho duplicar (ligações entre)")
+
+for(i in 1:length(resultado2)){ 
+  print(paste(paste(rev(resultado2[[i]]), collapse = " -> ")))
+}
+print("---------------------------------------------------------")
+
+```
+
+custo para percorrer todo o percurso.
+```{r}
+ 
+custo_total_chinaBoy<-sum(dados_no$peso)+menor_custo
+
+print("---------------------------------------------------------")
+cat("Custo total_china Boy", custo_total_chinaBoy, "\n")
+```
+#matriz de Adjacência
+
+```{r}
+# Regra de fleury, obtenção do circuito Euleriano.
+# criação da matriz de adjacências.
+matriz_adjacência<-matrix(0,nrow(matriz_custo),ncol(matriz_custo))
+for (i in 1:nrow(matriz_custo)){
+  for (j in 1:ncol(matriz_custo)){
+    if(matriz_custo[i,j]>0 && matriz_custo[i,j]!=Inf)
+      matriz_adjacência[i,j]<-1
+        }
+}
+
+
+
+for(k in 1:length(resultado2)){ 
+percurso1<-rev(resultado2[[k]])
+for (i in 1:(length(percurso1) - 1)) {
+  # Pega o nó atual e o nó seguinte no percurso
+  no_atual <- percurso1[i]
+  no_seguinte <- percurso1[i + 1]
+  
+  # Marca a passagem entre os nós como 1
+  matriz_adjacência[no_atual, no_seguinte] <- matriz_adjacência[no_atual, no_seguinte]+1
+  matriz_adjacência[no_seguinte, no_atual] <- matriz_adjacência[no_seguinte, no_atual]+1 # é biredicional
+                                         
+                                         }
+                            }
+print("----------------------Matriz de Adjacencia-----------------------------------")
+print(matriz_adjacência)
+```
+# contruindo o caminho através do algortimo de Hierholzer
+
+```{r}
+# Função para construir o circuito
+construir_circuito <- function(matriz_adj, ponto_inicial) { # vou usar pilha porque dá Bo de memória
+  # Inicializar o percurso e a pilha
+  percurso <- c()
+  pilha <- c(ponto_inicial)
+  
+  # Enquanto houver nós na pilha
+  while (length(pilha) > 0) {
+    no_atual <- pilha[length(pilha)]  # Pega o último nó na pilha
+    
+    # Procura por uma aresta disponível
+    vizinho <- which(matriz_adj[no_atual, ] > 0)[1]  # Primeiro vizinho disponível
+    
+    if (!is.na(vizinho)) {
+      # Remove a aresta (decrementa 1)
+      matriz_adj[no_atual, vizinho] <- matriz_adj[no_atual, vizinho] - 1
+      matriz_adj[vizinho, no_atual] <- matriz_adj[vizinho, no_atual] - 1
+      
+      # Adiciona o vizinho à pilha
+      pilha <- c(pilha, vizinho)
+    } else {
+      # Não há mais vizinhos: adiciona ao percurso e remove da pilha
+      percurso <- c(percurso, no_atual)
+      pilha <- pilha[-length(pilha)]
+    }
+  }
+  
+  # Retorna o percurso na ordem correta
+  return(rev(percurso))
+}
+
+#ponto inicial no circuito
+inicial<-1
+
+FINAL<-construir_circuito(matriz_adjacência,inicial)
+
+cat("Percurso final:", paste(FINAL, collapse = " -> "), "\n") 
+
+```
+
+#Desenhar o Gráfico
+
+```{r}
+#desenhar o gráfico final
+
+# Criar as arestas a partir do percurso
+arestas <- cbind(FINAL[-length(FINAL)], FINAL[-1])
+
+# Verificar se todas as arestas estão definidas na matriz de custos
+pesos <- apply(arestas, 1, function(aresta) {
+  # Garantir que os índices estejam dentro dos limites
+  if (aresta[1] > nrow(matriz_custo) || aresta[2] > ncol(matriz_custo)) {
+    stop(paste("Erro: Índices fora dos limites na aresta:", paste(aresta, collapse = "-")))
+  }
+  matriz_custo[aresta[1], aresta[2]]
+})
+
+# Ajustar pesos para evitar valores zero
+pesos[pesos == 0] <- 1e-3
+
+# Criar o grafo no igraph
+grafo_FINAL <- graph_from_edgelist(as.matrix(arestas), directed = TRUE)
+E(grafo_FINAL)$weight <- pesos
+#windows()
+# Plotar o grafo
+
+plot(
+  grafo_FINAL,
+  edge.label = round(E(grafo_FINAL)$weight, 2), # Mostrar os pesos nas arestas
+  edge.arrow.size = 0.5,                  # Tamanho das setas
+  vertex.label = V(grafo_FINAL)$name,           # Rótulos dos vértices
+  vertex.size = 20,                       # Tamanho dos vértices
+  layout = layout_with_kk                 # Usa Kamada-Kawai
+)
+```
